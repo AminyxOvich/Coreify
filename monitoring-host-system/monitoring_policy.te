@@ -1,0 +1,24 @@
+
+module monitoring_policy 1.0;
+
+require {
+	type container_t;
+	type container_var_run_t;
+	type container_file_t;
+	type user_home_t;
+	class sock_file write;
+	class file { read getattr open };
+	class dir { read search getattr };
+}
+
+#============= container_t ==============
+# Allow containers to write to Docker socket for log collection
+allow container_t container_var_run_t:sock_file write;
+
+# Allow containers to read configuration files
+allow container_t container_file_t:file { read getattr open };
+allow container_t container_file_t:dir { read search getattr };
+
+# Allow containers to read user home files (for mounted configs)
+allow container_t user_home_t:file { read getattr open };
+allow container_t user_home_t:dir { read search getattr };

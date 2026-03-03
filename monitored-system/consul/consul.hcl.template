@@ -1,0 +1,51 @@
+datacenter = "monitoring-dc"
+data_dir = "/consul/data"
+log_level = "INFO"
+
+# Enable Prometheus telemetry
+telemetry {
+  prometheus_retention_time = "30s"
+  disable_hostname = true
+}
+
+node_name = "${CONSUL_NODE_NAME}"
+advertise_addr = "${CONSUL_ADVERTISE}" # Use the CONSUL_ADVERTISE environment variable for the agent's advertise address
+retry_join = ["${MONITORING_HOST}"]
+
+services = [
+  {
+    name = "node-exporter"
+    address = "${CONSUL_ADVERTISE}" # Use the CONSUL_ADVERTISE environment variable for the service's address
+    port = 9100
+    tags = ["exporter"]
+    check = {
+      http = "http://${CONSUL_ADVERTISE}:9100/metrics"
+      interval = "10s"
+      timeout = "5s"
+    }
+  },
+  {
+    name = "promtail"
+    address = "${CONSUL_ADVERTISE}" # Use the CONSUL_ADVERTISE environment variable for the service's address
+    port = 9080
+    tags = ["logs"]
+    check = {
+      http = "http://${CONSUL_ADVERTISE}:9080/ready"
+      interval = "10s"
+      timeout = "5s"
+    }
+  },
+  {
+    name = "consul-agent" # Renamed for clarity, distinct from consul-server service
+    id = "consul-agent"  # Explicit ID
+    address = "${CONSUL_ADVERTISE}" # Use the CONSUL_ADVERTISE environment variable for the service's address
+    port = 8500 # Agent HTTP port
+    tags = ["agent", "consul"]
+    check = {
+      # Check if the agent's local HTTP API is responsive
+      http = "http://${CONSUL_ADVERTISE}:8500/v1/agent/self"
+      interval = "10s"
+      timeout = "5s"
+    }
+  }
+]

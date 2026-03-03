@@ -1,0 +1,90 @@
+groups:
+  - name: consul_metrics
+    rules:
+      - record: consul_server_leader
+        expr: max(consul_raft_state_leader) > 0
+  - name: Consul Service Alerts
+    rules:
+      - alert: ConsulLeaderNotAvailable
+        expr: absent(consul_server_leader)
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Consul leader is not available"
+          description: "No leader found in Consul cluster."
+
+      - alert: ConsulServerDown
+        expr: up{job="consul"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Consul server is down"
+          description: "Consul server instance is not reachable."
+
+  - name: Prometheus Alerts
+    rules:
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus is down"
+          description: "Prometheus instance is not reachable."
+
+  - name: Grafana Alerts
+    rules:
+      - alert: GrafanaDown
+        expr: up{job="grafana"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Grafana is down"
+          description: "Grafana instance is not reachable."
+
+  - name: Loki Alerts
+    rules:
+      - alert: LokiDown
+        expr: up{job="loki"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Loki is down"
+          description: "Loki instance is not reachable."
+
+  - name: Node Exporter Alerts
+    rules:
+      - alert: NodeExporterDown
+        expr: up{job="node-exporter"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node Exporter is down"
+          description: "Node Exporter instance is not reachable."
+
+  - name: Vector Alerts
+    rules:
+      - alert: VectorDown
+        expr: up{job="vector"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Vector is down"
+          description: "Vector instance is not reachable."
+
+  - name: Promtail Alerts
+    rules:
+      - alert: PromtailDown
+        expr: up{job="promtail"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Promtail is down"
+          description: "Promtail instance is not reachable."

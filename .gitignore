@@ -1,0 +1,47 @@
+# ─── Secrets & Environment ───────────────────────────────────────────────────
+.env
+*.env
+.env.*
+!.env.example
+
+# ─── Consul Runtime Data ─────────────────────────────────────────────────────
+monitored-system/consul-data/
+consul-data/
+**/consul-data/
+**/node-id
+**/checkpoint-signature
+**/serf/
+
+# ─── Compressed Archives ─────────────────────────────────────────────────────
+compressed/
+*.zip
+*.tar.gz
+*.tgz
+
+# ─── Backup Files ────────────────────────────────────────────────────────────
+Backup/
+*.backup
+*.bak
+
+# ─── Promtail Positions ──────────────────────────────────────────────────────
+**/positions.yaml
+**/positions.yml
+
+# ─── Docker Volumes / Runtime ────────────────────────────────────────────────
+**/loki-data/
+**/grafana-data/
+**/prometheus-data/
+**/postgres-data/
+
+# ─── SELinux compiled policy modules ────────────────────────────────────────
+*.mod
+*.pp
+
+# ─── OS / Editor ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/

@@ -1,0 +1,18 @@
+
+module promtail_docker_socket 1.0;
+
+require {
+	type container_t;
+	type spc_t;
+	type container_runtime_t;
+	class unix_stream_socket connectto;
+	class memprotect mmap_zero;
+}
+
+#============= container_t ==============
+allow container_t container_runtime_t:unix_stream_socket connectto;
+
+#============= spc_t ==============
+
+#!!!! This avc can be allowed using the boolean 'mmap_low_allowed'
+allow spc_t self:memprotect mmap_zero;

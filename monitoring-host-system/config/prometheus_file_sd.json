@@ -1,0 +1,44 @@
+[
+  {
+    "targets": [
+      "YOUR_MONITORING_HOST_IP:9100"
+    ],
+    "labels": {
+      "hostname": "consul-monitoring-server",
+      "server_id": "consul-monitoring-server",
+      "node_type": "monitored",
+      "instance": "consul-monitoring-server",
+      "environment": "production",
+      "discovery_method": "database",
+      "server_role": "monitoring-server"
+    }
+  },
+  {
+    "targets": [
+      "YOUR_NODE_02_IP:9100"
+    ],
+    "labels": {
+      "hostname": "monitored-node-02",
+      "server_id": "monitored-node-02",
+      "node_type": "monitored",
+      "instance": "monitored-node-02",
+      "environment": "production",
+      "discovery_method": "database",
+      "server_role": "monitored-node"
+    }
+  },
+  {
+    "targets": [
+      "YOUR_NODE_01_IP:9100"
+    ],
+    "labels": {
+      "hostname": "monitored-node-01",
+      "server_id": "monitored-node-01",
+      "node_type": "monitored",
+      "instance": "monitored-node-01",
+      "environment": "production",
+      "discovery_method": "database",
+      "server_role": "monitored-node"
+    }
+  }
+]
