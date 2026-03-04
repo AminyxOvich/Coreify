@@ -23,6 +23,8 @@ ports {
   dns = 8600
 }
 
+# ─── Service Registrations ───────────────────────────────────────────
+
 services {
   name = "consul"
   id = "consul-server"
@@ -56,7 +58,7 @@ services {
   }
   
   meta = {
-    version = "2.47.0"
+    version = "2.53.4"
     scrape_interval = "15s"
   }
 }
@@ -75,7 +77,7 @@ services {
   }
   
   meta = {
-    version = "10.1.0"
+    version = "11.5.2"
   }
 }
 
@@ -93,25 +95,7 @@ services {
   }
   
   meta = {
-    version = "2.9.0"
-  }
-}
-
-services {
-  name = "vector"
-  id = "vector-monitoring"
-  address = "vector"
-  port = 8686
-  tags = ["vector", "log-processing", "monitoring-stack"]
-  
-  check {
-    http = "http://vector:8686/health"
-    interval = "30s"
-    timeout = "5s"
-  }
-  
-  meta = {
-    version = "0.33.0"
+    version = "3.4.2"
   }
 }
 
@@ -129,7 +113,7 @@ services {
   }
   
   meta = {
-    version = "1.6.1"
+    version = "1.8.2"
     node_type = "monitoring-host"
   }
 }
@@ -148,7 +132,7 @@ services {
   }
   
   meta = {
-    version = "2.9.0"
+    version = "3.4.2"
     node_type = "monitoring-host"
   }
 }

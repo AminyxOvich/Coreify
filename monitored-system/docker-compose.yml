@@ -1,4 +1,6 @@
-version: '3.8'
+# Monitored Node Stack — Consul Agent + Node Exporter + Promtail
+# All services use host networking so they bind directly to the host's IP.
+# Requires: .env file with MONITORING_HOST, CONSUL_NODE_NAME, CONSUL_ADVERTISE
 
 services:
   consul-agent:
@@ -9,7 +11,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./consul/consul.hcl.template:/consul/config/consul.hcl.template:ro,z
-      - ./consul-data:/consul/data:z
+      - consul-data:/consul/data:z
     network_mode: host
     restart: unless-stopped
     entrypoint: ["/entrypoint.sh"]
@@ -17,42 +19,103 @@ services:
       - MONITORING_HOST=${MONITORING_HOST}
       - CONSUL_NODE_NAME=${CONSUL_NODE_NAME}
       - CONSUL_ADVERTISE=${CONSUL_ADVERTISE}
+    healthcheck:
+      test: ["CMD", "consul", "members"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "app.component=consul-agent"
+      - "app.part-of=monitored-stack"
 
   node-exporter:
-    image: prom/node-exporter:latest
+    image: prom/node-exporter:v1.8.2
     container_name: node-exporter
     volumes:
-      - ./node-exporter/entrypoint.sh:/entrypoint.sh
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
     network_mode: host
     restart: unless-stopped
-    entrypoint: ["/entrypoint.sh"]
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--web.listen-address=:9100"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9100/metrics > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.20"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "app.component=node-exporter"
+      - "app.part-of=monitored-stack"
 
   promtail:
-    image: grafana/promtail:latest
+    image: grafana/promtail:3.4.2
     container_name: promtail
     volumes:
-
       - ${PROMTAIL_CONFIG_PATH:-./promtail/config.yml}:/etc/promtail/config.yml:ro,z
-      - /var/run/docker.sock:/var/run/docker.sock:ro,Z # Add this line to mount the Docker socket
+      - /var/run/docker.sock:/var/run/docker.sock:ro,Z
       - /var/log:/mnt/host/var/log:ro
-      - promtail_positions:/promtail/data
+      - promtail-positions:/promtail/data
     command:
       - "-config.file=/etc/promtail/config.yml"
-      # 4. Explicitly tell Promtail where to store its positions file,
-      #    pointing to the writable volume.
       - "-positions.file=/promtail/data/positions.yaml"
       - "-config.expand-env=true"
-    environment: # Ensure MONITORING_HOST is passed if used in config
+    environment:
       - MONITORING_HOST=${MONITORING_HOST}
+      - CONSUL_NODE_NAME=${CONSUL_NODE_NAME:-monitored-node}
     network_mode: host
     restart: unless-stopped
-    #entrypoint: ["/entrypoint.sh"]
+    depends_on:
+      consul-agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9080/ready > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "app.component=promtail"
+      - "app.part-of=monitored-stack"
 
 volumes:
   consul-data:
     driver: local
-  promtail_positions: {} 
-
-networks:
-  monitoring:
-    driver: bridge
+  promtail-positions:
+    driver: local

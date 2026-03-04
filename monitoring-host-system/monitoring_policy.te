@@ -1,24 +1,47 @@
 
-module monitoring_policy 1.0;
+module monitoring_policy 1.1;
 
 require {
 	type container_t;
+	type spc_t;
+	type container_runtime_t;
 	type container_var_run_t;
 	type container_file_t;
 	type user_home_t;
-	class sock_file write;
+	type var_log_t;
+	type var_run_t;
+	type docker_var_run_t;
+	type unreserved_port_t;
+	class unix_stream_socket connectto;
+	class memprotect mmap_zero;
+	class sock_file { read write getattr open };
 	class file { read getattr open };
-	class dir { read search getattr };
+	class dir { read search getattr open };
+	class lnk_file { read getattr };
+	class tcp_socket { name_bind name_connect };
 }
 
 #============= container_t ==============
-# Allow containers to write to Docker socket for log collection
-allow container_t container_var_run_t:sock_file write;
 
-# Allow containers to read configuration files
+# Allow containers to connect to Docker socket (Promtail log discovery)
+allow container_t container_runtime_t:unix_stream_socket connectto;
+allow container_t docker_var_run_t:sock_file { read write getattr open };
+allow container_t container_var_run_t:sock_file { read write getattr };
+allow container_t var_run_t:sock_file { read write getattr };
+
+# Allow containers to read host /var/log (Promtail host log collection)
+allow container_t var_log_t:dir { read search open getattr };
+allow container_t var_log_t:file { read open getattr };
+allow container_t var_log_t:lnk_file { read getattr };
+
+# Allow containers to read config files mounted from host
 allow container_t container_file_t:file { read getattr open };
 allow container_t container_file_t:dir { read search getattr };
-
-# Allow containers to read user home files (for mounted configs)
 allow container_t user_home_t:file { read getattr open };
 allow container_t user_home_t:dir { read search getattr };
+
+# Allow Loki / Prometheus / Grafana to bind high ports
+allow container_t unreserved_port_t:tcp_socket { name_bind name_connect };
+
+#============= spc_t ==============
+allow spc_t self:memprotect mmap_zero;

@@ -1,64 +1,72 @@
 #!/bin/bash
+set -euo pipefail
 
-# Function to check if user is in docker group
-is_user_in_docker_group() {
-  if groups "$USER" | grep -q '\bdocker\b'; then
-    return 0 # User is in docker group
-  else
-    return 1 # User is not in docker group
-  fi
-}
+echo "=== Monitored Node Deployment ==="
 
-# Add current user to docker group if not already a member
-if ! is_user_in_docker_group; then
-  echo "User '$USER' is not in the 'docker' group."
-  echo "Attempting to add '$USER' to the 'docker' group. This requires sudo privileges."
-  sudo usermod -aG docker "$USER"
-  if [ $? -eq 0 ]; then
-    echo "Successfully added '$USER' to the 'docker' group."
-    echo "IMPORTANT: You need to log out and log back in for this change to take effect."
-    echo "Please log out, log back in, and then re-run this script."
-    exit 1
-  else
-    echo "Failed to add '$USER' to the 'docker' group. Please do this manually and then re-run the script."
-    exit 1
-  fi
+# ─── OS setup check ───────────────────────────────────────────────────
+if [[ ! -f /etc/sysctl.d/99-monitored-node.conf ]]; then
+  echo "WARNING: OS setup has not been run yet."
+  echo "  Run: sudo ./setup-os.sh"
+  echo "  This configures firewall, SELinux, sysctl, and Docker."
+  read -p "Continue anyway? [y/N] " -n 1 -r
+  echo
+  [[ $REPLY =~ ^[Yy]$ ]] || exit 1
 fi
 
-# Set execute permissions for necessary scripts
-echo "Setting execute permissions for scripts..."
+# ─── Docker group check ──────────────────────────────────────────────
+if ! groups "$USER" | grep -q '\bdocker\b'; then
+  echo "User '$USER' is not in the 'docker' group."
+  echo "Adding '$USER' to the 'docker' group (requires sudo)..."
+  sudo usermod -aG docker "$USER"
+  echo "Please log out, log back in, and re-run this script."
+  exit 1
+fi
+
+# ─── Set script permissions ──────────────────────────────────────────
+echo "Setting execute permissions..."
 chmod +x ./consul/entrypoint.sh
-chmod +x ./node-exporter/entrypoint.sh
-chmod +x ./promtail/entrypoint.sh
-chmod +x ./scripts/deploy.sh # Self-permissioning, good for consistency
+chmod +x ./node-exporter/entrypoint.sh 2>/dev/null || true
+chmod +x ./promtail/entrypoint.sh 2>/dev/null || true
+chmod +x ./scripts/deploy.sh
 chmod +x ./scripts/teardown.sh
 
-# Load environment variables from .env file
+# ─── Load .env ────────────────────────────────────────────────────────
 if [ -f .env ]; then
-  echo "Loading environment variables from .env file..."
-  export $(grep -v '^#' .env | xargs)
+  echo "Loading environment from .env..."
+  set -a
+  source .env
+  set +a
 else
-  echo "Warning: .env file not found. Some configurations might be missing."
+  echo "ERROR: .env file not found. Copy .env.example to .env and fill in your values."
+  exit 1
 fi
 
-# Bring down any existing services defined in docker-compose.yml
-echo "Bringing down any existing services..."
-docker-compose down
+# ─── Validate required vars ──────────────────────────────────────────
+for var in MONITORING_HOST CONSUL_NODE_NAME CONSUL_ADVERTISE; do
+  if [ -z "${!var:-}" ]; then
+    echo "ERROR: $var is not set in .env"
+    exit 1
+  fi
+done
 
-# Create necessary directories (idempotent)
-echo "Ensuring necessary directories exist..."
-mkdir -p ./consul/data
-mkdir -p ./promtail # Changed from ./promtail/config as config.yml is a file mount
+echo "  MONITORING_HOST  = $MONITORING_HOST"
+echo "  CONSUL_NODE_NAME = $CONSUL_NODE_NAME"
+echo "  CONSUL_ADVERTISE = $CONSUL_ADVERTISE"
 
-# docker-compose up depends on how they are used.
-export CONSUL_CONFIG_PATH=./consul/consul.hcl
-export NODE_EXPORTER_PORT=9100
-export PROMTAIL_CONFIG_PATH=./promtail/config.yml
+# ─── Clean up previous deployment ────────────────────────────────────
+echo "Stopping existing services..."
+docker compose down --remove-orphans 2>/dev/null || true
 
-# Start the Docker Compose stack
-echo "Starting the Docker Compose stack in detached mode..."
-docker-compose up -d --build # Added --build to ensure images are up-to-date with any changes
+# ─── Deploy ───────────────────────────────────────────────────────────
+echo "Building and starting services..."
+docker compose up -d --build
 
-# Display the status of the services
-echo "Current status of services:"
-docker-compose ps
+echo ""
+echo "=== Service Status ==="
+docker compose ps
+
+echo ""
+echo "=== Deployment Complete ==="
+echo "Consul agent will join $MONITORING_HOST"
+echo "Node Exporter: http://$CONSUL_ADVERTISE:9100/metrics"
+echo "Promtail:      http://$CONSUL_ADVERTISE:9080/ready"

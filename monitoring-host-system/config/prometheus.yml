@@ -1,40 +1,37 @@
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+  scrape_timeout: 10s
 
 rule_files:
   - "consul-rules.yml"
 
 scrape_configs:
-  - job_name: 'consul-services'
+  # ─── Consul Service Discovery (all registered services) ────────────
+  - job_name: "consul-services"
     consul_sd_configs:
-      - server: 'consul:8500'
-        services: [] # Scrape all services registered with Consul
+      - server: "consul:8500"
+        services: []
     relabel_configs:
-      # Drop vector service if it's discovered by name
       - source_labels: [__meta_consul_service]
         action: drop
         regex: vector
-      # Drop any service trying to be scraped on port 8300 (Consul RPC)
       - source_labels: [__meta_consul_service_port]
         action: drop
         regex: "8300"
-      # If the service is 'consul' or 'consul-agent', set metrics path and params
       - source_labels: [__meta_consul_service]
-        regex: '^(consul|consul-agent)$' # Updated regex
+        regex: "^(consul|consul-agent)$"
         action: replace
         target_label: __metrics_path__
-        replacement: '/v1/agent/metrics'
+        replacement: "/v1/agent/metrics"
       - source_labels: [__meta_consul_service]
-        regex: '^(consul|consul-agent)$' # Updated regex
+        regex: "^(consul|consul-agent)$"
         action: replace
         target_label: __param_format
-        replacement: 'prometheus'
-      # Default job label from service name
+        replacement: "prometheus"
       - source_labels: [__meta_consul_service]
         target_label: job
-        replacement: ${1} # Use the service name as the job label
-      # Standard instance and service_id labels
+        replacement: ${1}
       - source_labels: [__meta_consul_node]
         target_label: instance
       - source_labels: [__meta_consul_service_id]
@@ -43,48 +40,44 @@ scrape_configs:
         target_label: consul_tags
         regex: (.*)
         replacement: ${1}
-      # Ensure an address is present, otherwise Prometheus uses "localhost"
-      - source_labels: [__meta_consul_service_address]
-        action: keep # Keep only if an address is present
-        regex: '.+' # Matches one or more characters
-
-  - job_name: 'node-exporters'
-    consul_sd_configs:
-      - server: 'consul:8500'
-        services: ['node-exporter'] # Only discover 'node-exporter' services
-    relabel_configs:
-      # Keep only if service address is defined
       - source_labels: [__meta_consul_service_address]
         action: keep
-        regex: '.+'
-      # Set target address using the service's IP and port 9100
+        regex: ".+"
+
+  # ─── Node Exporters via Consul SD ──────────────────────────────────
+  - job_name: "node-exporters"
+    consul_sd_configs:
+      - server: "consul:8500"
+        services: ["node-exporter"]
+    relabel_configs:
+      - source_labels: [__meta_consul_service_address]
+        action: keep
+        regex: ".+"
       - source_labels: [__meta_consul_service_address]
         target_label: __address__
-        replacement: '${1}:9100' # Assumes node-exporter is always on 9100
-      # Standard labels
+        replacement: "${1}:9100"
       - source_labels: [__meta_consul_node]
         target_label: instance
 
-  - job_name: 'prometheus'
+  # ─── Prometheus self-scrape ────────────────────────────────────────
+  - job_name: "prometheus"
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: ["localhost:9090"]
 
-  # Dynamic infrastructure monitoring for targeted servers
-  - job_name: 'targeted-infrastructure'
+  # ─── File-based SD for targeted infrastructure ─────────────────────
+  - job_name: "targeted-infrastructure"
     honor_labels: true
     scrape_interval: 15s
     scrape_timeout: 10s
-    metrics_path: '/metrics'
-    scheme: 'http'
+    metrics_path: "/metrics"
+    scheme: "http"
     file_sd_configs:
       - files:
-          - '/tmp/monitoring-configs/prometheus_file_sd_targets.json'
+          - "/etc/prometheus/file_sd/targets.json"
         refresh_interval: 30s
     relabel_configs:
-      # Add discovery method label
       - target_label: discovery_method
-        replacement: 'automated_file_sd'
-      # Preserve existing labels from file SD
+        replacement: "automated_file_sd"
       - source_labels: [server_role]
         target_label: server_role
       - source_labels: [hostname]

@@ -67,19 +67,10 @@ CREATE INDEX IF NOT EXISTS idx_server_alerts_created_at ON server_alerts(created
 CREATE TABLE IF NOT EXISTS server_logs (
     id SERIAL PRIMARY KEY,
     server_id VARCHAR(255) REFERENCES servers(server_id) ON DELETE CASCADE,
-    log_message TEXT NOT NULL CHECK (
-        log_message IN (
-            '- 1131058435 2005.11.03 R65-M0-N1-C:J10-U11 2005-11-03-14.53.55.999999 R65-M0-N1-C:J10-U11 RAS KERNEL ERROR iar 99999999 dear deadbeef',
-            '- 1131058435 2005.11.03 R66-M1-NC-C:J03-U11 2005-11-03-14.53.55.223907 R66-M1-NC-C:J03-U11 RAS KERNEL INFO iar 001061dc dear 0244c25c',
-            '- 1131058435 2005.11.03 R65-M0-N1-C:J14-U01 2005-11-03-14.53.55.221510 R65-M0-N1-C:J14-U01 RAS KERNEL INFO iar 00106228 dear 0244c24c',
-            '- 1131058435 2005.11.03 R66-M1-NC-C:J03-U11 2005-11-03-14.53.55.204874 R66-M1-NC-C:J03-U11 RAS KERNEL INFO iar 001061dc dear 0244c22c',
-            '- 1131058435 2005.11.03 R65-M0-N1-C:J12-U11 2005-11-03-14.53.55.196942 R65-M0-N1-C:J12-U11 RAS KERNEL INFO iar 00106228 dear 0244c21c',
-            '- 1131058435 2005.11.03 R66-M1-NC-C:J05-U11 2005-11-03-14.53.55.180816 R66-M1-NC-C:J05-U11 RAS KERNEL INFO iar 001061dc dear 0244c25c',
-            '- 1131058435 2005.11.03 R65-M0-N1-C:J06-U11 2005-11-03-14.53.55.169707 R65-M0-N1-C:J06-U11 RAS KERNEL INFO iar 001061dc dear 0244c28c',
-            '- 1131058435 2005.11.03 R66-M1-NC-C:J05-U11 2005-11-03-14.53.55.159085 R66-M1-NC-C:J05-U11 RAS KERNEL INFO iar 001061dc dear 0244c22c'
-            -- Add the remaining 3 log messages here
-        )
-    ),
+    log_level VARCHAR(20) DEFAULT 'INFO',
+    log_message TEXT NOT NULL,
+    source VARCHAR(255),
+    archived BOOLEAN DEFAULT false,
     collected_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -87,6 +78,7 @@ CREATE TABLE IF NOT EXISTS server_logs (
 CREATE INDEX IF NOT EXISTS idx_server_logs_server_id ON server_logs(server_id);
 CREATE INDEX IF NOT EXISTS idx_server_logs_collected_at ON server_logs(collected_at);
 CREATE INDEX IF NOT EXISTS idx_server_logs_archived ON server_logs(archived);
+CREATE INDEX IF NOT EXISTS idx_server_logs_level ON server_logs(log_level);
 
 -- Insert default monitored servers (existing ones from static config)
 INSERT INTO servers (server_id, hostname, ip_address, salt_minion_id, node_type, status, consul_registered, metadata) 

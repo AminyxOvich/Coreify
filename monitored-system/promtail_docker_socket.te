@@ -1,16 +1,34 @@
 
-module promtail_docker_socket 1.0;
+module promtail_docker_socket 1.1;
 
 require {
 	type container_t;
 	type spc_t;
 	type container_runtime_t;
+	type var_log_t;
+	type var_run_t;
+	type docker_var_run_t;
 	class unix_stream_socket connectto;
 	class memprotect mmap_zero;
+	class sock_file { read write getattr open };
+	class dir { read search open getattr };
+	class file { read open getattr };
+	class lnk_file { read getattr };
 }
 
 #============= container_t ==============
+
+# Allow Promtail container to connect to Docker socket
 allow container_t container_runtime_t:unix_stream_socket connectto;
+allow container_t docker_var_run_t:sock_file { read write getattr open };
+
+# Allow Promtail to read host /var/log files
+allow container_t var_log_t:dir { read search open getattr };
+allow container_t var_log_t:file { read open getattr };
+allow container_t var_log_t:lnk_file { read getattr };
+
+# Allow Consul agent container to resolve DNS and use host networking
+allow container_t var_run_t:sock_file { read write getattr };
 
 #============= spc_t ==============
 

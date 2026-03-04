@@ -1,9 +1,20 @@
+# Monitoring Host Stack — Consul Server + Prometheus + Grafana + Loki + Promtail + PostgreSQL
+# Requires: .env file with GF_ADMIN_PASSWORD, POSTGRES_PASSWORD, etc.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+    tag: "{{.Name}}"
+
 services:
+  # ─── Service Discovery ─────────────────────────────────────────────
   consul:
     image: hashicorp/consul:1.16
     container_name: consul-server
     ports:
-      - "8500:8500"       # HTTP API
+      - "8500:8500"       # HTTP API + UI
       - "8600:8600/udp"   # DNS
       - "8300:8300/tcp"   # Server RPC
       - "8301:8301"       # LAN Serf TCP
@@ -15,49 +26,72 @@ services:
       - ./config/consul-server.hcl:/consul/config/consul.hcl:ro,Z
     command: ["consul", "agent", "-config-file=/consul/config/consul.hcl"]
     networks:
-      - consul-net
+      - monitoring
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "consul", "members"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.50"
+    logging: *default-logging
+    labels:
+      - "app.component=consul-server"
+      - "app.part-of=monitoring-stack"
 
+  # ─── Metrics ────────────────────────────────────────────────────────
   prometheus:
-    image: prom/prometheus:v2.47.0
+    image: prom/prometheus:v2.53.4
     container_name: prometheus
+    user: "nobody"
     ports:
       - "9090:9090"
     volumes:
       - prometheus-data:/prometheus
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro,Z
       - ./config/consul-rules.yml:/etc/prometheus/consul-rules.yml:ro,Z
-      - /tmp/monitoring-configs:/tmp/monitoring-configs:ro,Z
+      - ./config/prometheus_file_sd.json:/etc/prometheus/file_sd/targets.json:ro,Z
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=15d'
-      - '--web.enable-lifecycle'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--storage.tsdb.retention.size=10GB"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
     networks:
-      - consul-net
+      - monitoring
     restart: unless-stopped
+    depends_on:
+      consul:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.00"
+    logging: *default-logging
+    labels:
+      - "app.component=prometheus"
+      - "app.part-of=monitoring-stack"
 
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-changeme}
-      - GF_USERS_ALLOW_SIGN_UP=false
-    networks:
-      - consul-net
-    restart: unless-stopped
-
+  # ─── Log Aggregation ───────────────────────────────────────────────
   loki:
-    image: grafana/loki:2.9.0
+    image: grafana/loki:3.4.2
     container_name: loki
+    user: "loki"
     ports:
       - "3100:3100"
     volumes:
@@ -65,11 +99,67 @@ services:
       - ./config/loki.yml:/etc/loki/local-config.yaml:ro,Z
     command: -config.file=/etc/loki/local-config.yaml
     networks:
-      - consul-net
+      - monitoring
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "0.50"
+    logging: *default-logging
+    labels:
+      - "app.component=loki"
+      - "app.part-of=monitoring-stack"
 
+  # ─── Visualization ─────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.5.2
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-changeme}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_LOG_LEVEL=warn
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+    networks:
+      - monitoring
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.50"
+    logging: *default-logging
+    labels:
+      - "app.component=grafana"
+      - "app.part-of=monitoring-stack"
+
+  # ─── Host Metrics ──────────────────────────────────────────────────
   node-exporter:
-    image: prom/node-exporter:v1.6.1
+    image: prom/node-exporter:v1.8.2
     container_name: node-exporter-monitoring
     ports:
       - "9100:9100"
@@ -78,31 +168,65 @@ services:
       - /sys:/host/sys:ro
       - /:/rootfs:ro
     command:
-      - '--path.procfs=/host/proc'
-      - '--path.rootfs=/rootfs'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
     networks:
-      - consul-net
+      - monitoring
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9100/metrics > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.20"
+    logging: *default-logging
+    labels:
+      - "app.component=node-exporter"
+      - "app.part-of=monitoring-stack"
 
+  # ─── Log Shipping (Monitoring Host) ────────────────────────────────
   promtail:
-    image: grafana/promtail:2.9.0
+    image: grafana/promtail:3.4.2
     container_name: promtail-monitoring
     ports:
       - "9080:9080"
     volumes:
       - ./config/promtail.yml:/etc/promtail/config.yml:ro,Z
+      - promtail-positions:/tmp
       - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command: -config.file=/etc/promtail/config.yml
     networks:
-      - consul-net
-    depends_on:
-      - loki
+      - monitoring
     restart: unless-stopped
+    depends_on:
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9080/ready > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+    logging: *default-logging
+    labels:
+      - "app.component=promtail"
+      - "app.part-of=monitoring-stack"
 
+  # ─── Database ───────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: monitoring-postgres
@@ -116,16 +240,39 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./config/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
-      - consul-net
+      - monitoring
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-monitoring} -d ${POSTGRES_DB:-monitoring}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.50"
+    logging: *default-logging
+    labels:
+      - "app.component=postgres"
+      - "app.part-of=monitoring-stack"
 
 volumes:
   prometheus-data:
+    name: monitoring_prometheus_data
   grafana-data:
+    name: monitoring_grafana_data
   loki-data:
+    name: monitoring_loki_data
   consul-data:
+    name: monitoring_consul_data
   postgres-data:
+    name: monitoring_postgres_data
+  promtail-positions:
+    name: monitoring_promtail_positions
 
 networks:
-  consul-net:
+  monitoring:
+    name: monitoring
     driver: bridge
