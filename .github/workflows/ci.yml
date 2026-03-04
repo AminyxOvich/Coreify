@@ -44,9 +44,13 @@ jobs:
       # Docker Compose Syntax Check
       - name: Validate Docker Compose
         run: |
-          sudo apt-get update && sudo apt-get install -y docker-compose
-          docker-compose -f monitored-system/docker-compose.yml config > /dev/null
-          docker-compose -f monitoring-host-system/docker-compose.monitoring.yml config > /dev/null
+          # Create dummy .env files so variable interpolation doesn't fail
+          echo -e "MONITORING_HOST=10.0.0.1\nCONSUL_NODE_NAME=test\nCONSUL_ADVERTISE=10.0.0.2" \
+            > monitored-system/.env
+          echo -e "GF_ADMIN_PASSWORD=test\nPOSTGRES_PASSWORD=test" \
+            > monitoring-host-system/.env
+          docker compose -f monitored-system/docker-compose.yml config > /dev/null
+          docker compose -f monitoring-host-system/docker-compose.monitoring.yml config > /dev/null
           echo "✓ Docker Compose files valid"
 
       # HCL Syntax Check (Consul configs)

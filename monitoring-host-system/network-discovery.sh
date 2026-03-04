@@ -27,6 +27,7 @@ scan_network_for_targets() {
     log "Scanning network $NETWORK_RANGE for target servers..."
 
     # Use nmap to discover hosts with node_exporter running
+    # shellcheck disable=SC2034
     local discovered_hosts
     discovered_hosts=()
 
