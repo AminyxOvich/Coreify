@@ -26,11 +26,6 @@ log() {
 scan_network_for_targets() {
     log "Scanning network $NETWORK_RANGE for target servers..."
 
-    # Use nmap to discover hosts with node_exporter running
-    # shellcheck disable=SC2034
-    local discovered_hosts
-    discovered_hosts=()
-
     # Scan for hosts with node_exporter port open - use -Pn to skip ping test (hosts may block ICMP)
     log "Scanning for hosts with node_exporter (port $NODE_EXPORTER_PORT) - using -Pn to skip ping test..."
     nmap -Pn -p $NODE_EXPORTER_PORT --open -T4 "$NETWORK_RANGE" 2>/dev/null | grep -E "^Nmap scan report for|$NODE_EXPORTER_PORT/tcp open" | while read -r line; do
