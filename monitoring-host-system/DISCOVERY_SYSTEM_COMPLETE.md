@@ -64,7 +64,7 @@ Automatically generates Prometheus configurations:
       }
     },
     {
-      "targets": ["192.168.100.200:9100"], 
+      "targets": ["192.168.100.200:9100"],
       "labels": {
         "hostname": "monitored-node-01",
         "server_role": "monitored-node"
@@ -106,7 +106,7 @@ Automatically generates Prometheus configurations:
 # Database-based discovery every 5 minutes
 */5 * * * * /path/to/infrastructure-discovery.sh --automated
 
-# Network-based discovery every 2 hours  
+# Network-based discovery every 2 hours
 0 */2 * * * /path/to/network-discovery.sh --automated
 
 # Configuration updates every 10 minutes

@@ -18,19 +18,19 @@ SELECT json_agg(
             'instance', hostname,
             'environment', 'production',
             'discovery_method', 'database',
-            'server_role', CASE 
+            'server_role', CASE
                 WHEN hostname = 'consul-monitoring-server' THEN 'monitoring-server'
                 WHEN hostname LIKE 'monitored-node-%' THEN 'monitored-node'
                 ELSE 'unknown'
             END
         )
     )
-) 
-FROM servers 
-WHERE status = 'active' 
+)
+FROM servers
+WHERE status = 'active'
 AND prometheus_enabled = true
 AND (
-    hostname LIKE 'monitored-node-%' 
+    hostname LIKE 'monitored-node-%'
     OR hostname = 'consul-monitoring-server'
 );"
 

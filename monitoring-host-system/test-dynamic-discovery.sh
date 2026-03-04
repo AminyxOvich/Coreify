@@ -27,14 +27,14 @@ DISCOVERY_RESULT=$(cat << 'EOF'
         "status": "active"
     },
     {
-        "hostname": "db-server-01", 
+        "hostname": "db-server-01",
         "ip_address": "192.168.1.20",
         "node_type": "database",
         "status": "active"
     },
     {
         "hostname": "api-server-01",
-        "ip_address": "192.168.1.30", 
+        "ip_address": "192.168.1.30",
         "node_type": "api-server",
         "status": "active"
     }
@@ -48,12 +48,12 @@ echo "$DISCOVERY_RESULT" | jq '.'
 # Test 3: Update Server Registry
 echo "3. Testing server registry update..."
 docker exec monitoring-postgres psql -U monitoring -d monitoring -c "
-INSERT INTO servers (server_id, hostname, ip_address, node_type, status, metadata) 
-VALUES 
+INSERT INTO servers (server_id, hostname, ip_address, node_type, status, metadata)
+VALUES
     ('test-web-01', 'web-server-01', '192.168.1.10', 'web-server', 'active', '{\"discovered_by\": \"test_script\"}'),
     ('test-db-01', 'db-server-01', '192.168.1.20', 'database', 'active', '{\"discovered_by\": \"test_script\"}'),
     ('test-api-01', 'api-server-01', '192.168.1.30', 'api-server', 'active', '{\"discovered_by\": \"test_script\"}')
-ON CONFLICT (server_id) DO UPDATE SET 
+ON CONFLICT (server_id) DO UPDATE SET
     hostname = EXCLUDED.hostname,
     ip_address = EXCLUDED.ip_address,
     node_type = EXCLUDED.node_type,
@@ -68,7 +68,7 @@ else
     echo "❌ Server registry update failed"
 fi
 
-# Test 4: Load Servers from Database  
+# Test 4: Load Servers from Database
 echo "4. Testing server retrieval from database..."
 SERVERS_FROM_DB=$(docker exec monitoring-postgres psql -U monitoring -d monitoring -t -c "
 SELECT json_agg(
@@ -80,8 +80,8 @@ SELECT json_agg(
         'status', status,
         'node_exporter_port', node_exporter_port
     )
-) 
-FROM servers 
+)
+FROM servers
 WHERE status = 'active';
 " 2>/dev/null | tr -d '[:space:]')
 
@@ -97,20 +97,20 @@ fi
 echo "5. Simulating multi-server metrics collection..."
 echo "Servers available for monitoring:"
 docker exec monitoring-postgres psql -U monitoring -d monitoring -c "
-SELECT 
+SELECT
     hostname,
     host(ip_address) as ip,
     node_exporter_port,
     node_type,
     status
-FROM servers 
-WHERE status = 'active' 
+FROM servers
+WHERE status = 'active'
 ORDER BY hostname;
 "
 
 echo "=== Test Summary ==="
 echo "✅ PostgreSQL database connectivity: Working"
-echo "✅ Server discovery simulation: Working"  
+echo "✅ Server discovery simulation: Working"
 echo "✅ Server registry updates: Working"
 echo "✅ Server retrieval: Working"
 echo "✅ Multi-server monitoring setup: Ready"

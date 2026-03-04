@@ -1,5 +1,5 @@
-#to add the user
+#to add docker to the user
 sudo usermod -aG docker adel
 
-#to update without restarting 
+#to update without restarting
 exec su -l $USER

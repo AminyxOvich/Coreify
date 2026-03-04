@@ -11,23 +11,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      # YAML Validation (Docker Compose + Config Files)
-      - name: Validate YAML
-        run: |
-          sudo apt-get update && sudo apt-get install -y yamllint
-          yamllint -d relaxed \
-            monitored-system/docker-compose.yml \
-            monitoring-host-system/docker-compose.monitoring.yml \
-            monitored-system/promtail/config.yml \
-            monitoring-host-system/config/*.yml
-      
+
+      # Pre-Commit Validation
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files
+
       # JSON Validation (n8n workflow + Prometheus SD)
       - name: Validate JSON
         run: |
           python3 -c "import json; json.load(open('anomaly_workflow_with_fallback.json'))" && echo "✓ n8n workflow valid"
           python3 -c "import json; json.load(open('monitoring-host-system/config/prometheus_file_sd.json'))" && echo "✓ Prometheus SD valid"
-      
+
       # Bash Script Linting
       - name: Lint Shell Scripts
         run: |
@@ -38,7 +40,7 @@ jobs:
             monitoring-host-system/setup-os.sh \
             monitoring-host-system/deploy-monitoring.sh \
             monitoring-host-system/*.sh
-      
+
       # Docker Compose Syntax Check
       - name: Validate Docker Compose
         run: |
@@ -46,19 +48,19 @@ jobs:
           docker-compose -f monitored-system/docker-compose.yml config > /dev/null
           docker-compose -f monitoring-host-system/docker-compose.monitoring.yml config > /dev/null
           echo "✓ Docker Compose files valid"
-      
+
       # HCL Syntax Check (Consul configs)
       - name: Validate HCL
         run: |
           # Basic HCL validation using Python (checks for balanced braces/brackets)
           python3 << 'EOF'
           import re
-          
+
           files = [
               'monitoring-host-system/config/consul-server.hcl',
               'monitored-system/consul/consul.hcl.template'
           ]
-          
+
           for f in files:
               with open(f) as file:
                   content = file.read()
@@ -70,13 +72,13 @@ jobs:
                       print(f"✗ {f} has unbalanced braces")
                       exit(1)
           EOF
-      
+
       # SQL Syntax Check (basic validation)
       - name: Validate SQL
         run: |
           # Install postgresql-client for SQL checking
           sudo apt-get update && sudo apt-get install -y postgresql-client
-          
+
           # Basic SQL syntax validation
           for sql_file in monitoring-host-system/config/*.sql; do
               if [ -f "$sql_file" ]; then
@@ -89,13 +91,13 @@ jobs:
                   fi
               fi
           done
-      
+
       # Dockerfile Lint (hadolint)
       - name: Lint Dockerfile
         run: |
           sudo apt-get update && sudo apt-get install -y hadolint
           hadolint monitored-system/Dockerfile || true  # Warn only, don't fail
-      
+
       # Check for critical files
       - name: Verify Critical Files
         run: |
@@ -108,7 +110,7 @@ jobs:
               "monitored-system/docker-compose.yml"
               "monitoring-host-system/docker-compose.monitoring.yml"
           )
-          
+
           for file in "${required_files[@]}"; do
               if [ -f "$file" ]; then
                   echo "✓ $file exists"

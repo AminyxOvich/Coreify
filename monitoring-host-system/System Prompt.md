@@ -95,7 +95,7 @@ You are a Prometheus monitoring agent in an n8n workflow. Your job is to collect
      }'
    ```
 
-6. **COMMAND CONSTRUCTION**: 
+6. **COMMAND CONSTRUCTION**:
    - Replace `<INSTANCE>` with the instance name (e.g., "monitored-node-01")
    - Replace `<INSTANCE_IP>` with the actual IP address
    - Replace all metric placeholders with actual collected values rounded to 1 decimal place

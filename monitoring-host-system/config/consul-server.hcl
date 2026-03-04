@@ -30,13 +30,13 @@ services {
   id = "consul-server"
   port = 8500
   tags = ["consul", "service-discovery", "monitoring-stack"]
-  
+
   check {
     http = "http://localhost:8500/v1/status/leader"
     interval = "10s"
     timeout = "3s"
   }
-  
+
   meta = {
     version = "1.16"
     role = "server"
@@ -50,13 +50,13 @@ services {
   address = "prometheus"
   port = 9090
   tags = ["prometheus", "metrics", "monitoring-stack"]
-  
+
   check {
     http = "http://prometheus:9090/-/healthy"
     interval = "15s"
     timeout = "5s"
   }
-  
+
   meta = {
     version = "2.53.4"
     scrape_interval = "15s"
@@ -69,13 +69,13 @@ services {
   address = "grafana"
   port = 3000
   tags = ["grafana", "visualization", "monitoring-stack"]
-  
+
   check {
     http = "http://grafana:3000/api/health"
     interval = "30s"
     timeout = "5s"
   }
-  
+
   meta = {
     version = "11.5.2"
   }
@@ -87,13 +87,13 @@ services {
   address = "loki"
   port = 3100
   tags = ["loki", "logs", "monitoring-stack"]
-  
+
   check {
     http = "http://loki:3100/ready"
     interval = "30s"
     timeout = "5s"
   }
-  
+
   meta = {
     version = "3.4.2"
   }
@@ -105,13 +105,13 @@ services {
   address = "node-exporter"
   port = 9100
   tags = ["node-exporter", "metrics", "monitoring-host"]
-  
+
   check {
     http = "http://node-exporter:9100/metrics"
     interval = "30s"
     timeout = "5s"
   }
-  
+
   meta = {
     version = "1.8.2"
     node_type = "monitoring-host"
@@ -124,13 +124,13 @@ services {
   address = "promtail"
   port = 9080
   tags = ["promtail", "logs", "monitoring-host"]
-  
+
   check {
     http = "http://promtail:9080/ready"
     interval = "30s"
     timeout = "5s"
   }
-  
+
   meta = {
     version = "3.4.2"
     node_type = "monitoring-host"

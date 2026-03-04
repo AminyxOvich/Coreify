@@ -81,8 +81,8 @@ CREATE INDEX IF NOT EXISTS idx_server_logs_archived ON server_logs(archived);
 CREATE INDEX IF NOT EXISTS idx_server_logs_level ON server_logs(log_level);
 
 -- Insert default monitored servers (existing ones from static config)
-INSERT INTO servers (server_id, hostname, ip_address, salt_minion_id, node_type, status, consul_registered, metadata) 
-VALUES 
+INSERT INTO servers (server_id, hostname, ip_address, salt_minion_id, node_type, status, consul_registered, metadata)
+VALUES
     ('monitoring-server', 'consul-monitoring-server', '192.168.100.169', 'consul-monitoring-server', 'monitoring-host', 'active', true, '{"role": "monitoring", "services": ["consul", "prometheus", "grafana", "loki"]}'),
     ('monitored-node-01', 'monitored-node-01', '192.168.100.200', 'monitored-node-01', 'monitored', 'active', true, '{"role": "worker", "services": ["consul-agent", "node-exporter", "promtail"]}')
 ON CONFLICT (server_id) DO UPDATE SET
@@ -113,7 +113,7 @@ CREATE TRIGGER trigger_update_servers_timestamp
 
 -- Create view for active servers with recent metrics
 CREATE OR REPLACE VIEW active_servers_with_metrics AS
-SELECT 
+SELECT
     s.server_id,
     s.hostname,
     s.ip_address,
@@ -129,11 +129,11 @@ SELECT
     COUNT(CASE WHEN sm.threshold_exceeded = true THEN 1 END) as active_alerts,
     MAX(sm.collected_at) as last_metric_collection
 FROM servers s
-LEFT JOIN server_metrics sm ON s.server_id = sm.server_id 
+LEFT JOIN server_metrics sm ON s.server_id = sm.server_id
     AND sm.collected_at > CURRENT_TIMESTAMP - INTERVAL '1 hour'
 WHERE s.status = 'active'
-GROUP BY s.server_id, s.hostname, s.ip_address, s.salt_minion_id, s.node_type, 
-         s.status, s.consul_registered, s.prometheus_enabled, s.node_exporter_port, 
+GROUP BY s.server_id, s.hostname, s.ip_address, s.salt_minion_id, s.node_type,
+         s.status, s.consul_registered, s.prometheus_enabled, s.node_exporter_port,
          s.tags, s.metadata, s.last_seen;
 
 -- Grant permissions

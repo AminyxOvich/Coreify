@@ -24,17 +24,17 @@ CREATE INDEX IF NOT EXISTS idx_alert_history_last_sent ON alert_history(last_sen
 CREATE INDEX IF NOT EXISTS idx_alert_history_suppressed ON alert_history(suppressed);
 
 -- Add maintenance mode flag to servers table if it doesn't exist
-DO $$ 
+DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                    WHERE table_name = 'servers' AND column_name = 'maintenance_mode') THEN
         ALTER TABLE servers ADD COLUMN maintenance_mode BOOLEAN DEFAULT FALSE;
     END IF;
 END $$;
 
-DO $$ 
+DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                    WHERE table_name = 'servers' AND column_name = 'maintenance_until') THEN
         ALTER TABLE servers ADD COLUMN maintenance_until TIMESTAMP WITH TIME ZONE;
     END IF;
@@ -52,7 +52,7 @@ COMMENT ON COLUMN servers.maintenance_until IS 'End time for maintenance mode';
 CREATE OR REPLACE FUNCTION set_maintenance_mode(server_name VARCHAR, duration_hours INTEGER DEFAULT 2)
 RETURNS VOID AS $$
 BEGIN
-    UPDATE servers 
+    UPDATE servers
     SET maintenance_mode = TRUE,
         maintenance_until = NOW() + (duration_hours || ' hours')::INTERVAL
     WHERE hostname = server_name;
@@ -62,17 +62,17 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION clear_expired_maintenance()
 RETURNS VOID AS $$
 BEGIN
-    UPDATE servers 
+    UPDATE servers
     SET maintenance_mode = FALSE,
         maintenance_until = NULL
-    WHERE maintenance_mode = TRUE 
+    WHERE maintenance_mode = TRUE
     AND maintenance_until < NOW();
 END;
 $$ LANGUAGE plpgsql;
 
 -- View for alert dashboard
 CREATE OR REPLACE VIEW alert_summary AS
-SELECT 
+SELECT
     s.hostname,
     s.ip_address,
     s.status,
@@ -81,7 +81,7 @@ SELECT
     ah.last_sent,
     ah.suppressed,
     ah.severity,
-    CASE 
+    CASE
         WHEN s.maintenance_mode THEN 'Maintenance Mode'
         WHEN ah.suppressed THEN 'Suppressed'
         WHEN ah.last_sent > NOW() - INTERVAL '1 hour' THEN 'Recent Alert'
@@ -100,7 +100,7 @@ BEGIN
     -- Only insert if the table is empty
     IF NOT EXISTS (SELECT 1 FROM alert_history LIMIT 1) THEN
         INSERT INTO alert_history (server_id, alert_type, last_sent, suppressed, severity)
-        VALUES 
+        VALUES
         ('test-server', 'critical_threshold', NOW() - INTERVAL '2 hours', FALSE, 'HIGH'),
         ('test-server-2', 'critical_threshold', NOW() - INTERVAL '30 minutes', TRUE, 'MEDIUM');
     END IF;
@@ -116,19 +116,19 @@ DECLARE
 BEGIN
     -- Check if server is in maintenance mode
     SELECT maintenance_mode INTO in_maintenance
-    FROM servers 
+    FROM servers
     WHERE hostname = server_name;
-    
+
     -- Check if there was a recent alert (within last hour)
     SELECT EXISTS(
         SELECT 1 FROM alert_history ah
         JOIN servers s ON ah.server_id = s.server_id
-        WHERE s.hostname = server_name 
+        WHERE s.hostname = server_name
         AND ah.alert_type = alert_type_param
         AND ah.last_sent > NOW() - INTERVAL '1 hour'
         AND NOT ah.suppressed
     ) INTO recent_alert;
-    
+
     -- Return TRUE if should suppress (maintenance mode OR recent alert)
     RETURN (in_maintenance OR recent_alert);
 END;

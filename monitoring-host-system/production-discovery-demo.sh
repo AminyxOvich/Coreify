@@ -33,23 +33,23 @@ check_database() {
 # Function to show current target infrastructure
 show_target_infrastructure() {
     echo "2. Current target infrastructure:"
-    
+
     docker exec "$DB_CONTAINER" psql -U monitoring -d monitoring -c "
-    SELECT 
+    SELECT
         hostname,
         host(ip_address) as ip_address,
         node_type,
         status,
-        CASE 
+        CASE
             WHEN hostname = 'consul-monitoring-server' THEN '🖥️  Monitoring Server'
             WHEN hostname LIKE 'monitored-node-%' THEN '📡 Monitored Node'
             ELSE '❓ Other'
         END as server_role,
         CASE WHEN prometheus_enabled THEN '✅' ELSE '❌' END as monitoring_enabled,
         last_seen
-    FROM servers 
+    FROM servers
     WHERE (hostname LIKE 'monitored-node-%' OR hostname = 'consul-monitoring-server')
-    ORDER BY 
+    ORDER BY
         CASE WHEN hostname = 'consul-monitoring-server' THEN 1 ELSE 2 END,
         hostname;
     " 2>/dev/null
@@ -58,7 +58,7 @@ show_target_infrastructure() {
 # Function to generate production configurations
 generate_production_configs() {
     echo "3. Generating production monitoring configurations..."
-    
+
     # Generate Prometheus target configuration
     local targets_json
     targets_json=$(docker exec "$DB_CONTAINER" psql -U monitoring -d monitoring -t -c "
@@ -72,23 +72,23 @@ generate_production_configs() {
                 'instance', hostname,
                 'environment', 'production',
                 'discovery_method', 'automated',
-                'server_role', CASE 
+                'server_role', CASE
                     WHEN hostname = 'consul-monitoring-server' THEN 'monitoring-server'
                     WHEN hostname LIKE 'monitored-node-%' THEN 'monitored-node'
                     ELSE 'unknown'
                 END
             )
         )
-    ) 
-    FROM servers 
-    WHERE status = 'active' 
+    )
+    FROM servers
+    WHERE status = 'active'
     AND prometheus_enabled = true
     AND (
-        hostname LIKE 'monitored-node-%' 
+        hostname LIKE 'monitored-node-%'
         OR hostname = 'consul-monitoring-server'
     );
     " 2>/dev/null | tr -d '[:space:]')
-    
+
     if [ "$targets_json" != "null" ] && [ -n "$targets_json" ]; then
         # Generate complete Prometheus job configuration
         cat > "$CONFIG_DIR/prometheus_production_config.json" << EOF
@@ -102,10 +102,10 @@ generate_production_configs() {
   "static_configs": $targets_json
 }
 EOF
-        
+
         # Generate file service discovery format
         echo "$targets_json" | jq '.' > "$CONFIG_DIR/prometheus_file_sd_targets.json"
-        
+
         # Generate Prometheus YAML snippet for integration
         cat > "$CONFIG_DIR/prometheus_integration.yml" << EOF
 # Add this job to your prometheus.yml configuration
@@ -121,13 +121,13 @@ scrape_configs:
           - "$CONFIG_DIR/prometheus_file_sd_targets.json"
         refresh_interval: 30s
 EOF
-        
+
         local server_count
         server_count=$(echo "$targets_json" | jq '. | length' 2>/dev/null || echo "0")
-        
+
         echo "   ✅ Generated configurations for $server_count target servers"
         echo "   📁 Production configs saved to: $CONFIG_DIR/"
-        
+
         return 0
     else
         echo "   ❌ No target servers found for configuration generation"
@@ -138,25 +138,25 @@ EOF
 # Function to validate server connectivity
 validate_connectivity() {
     echo "4. Validating server connectivity..."
-    
+
     local total_servers=0
     local reachable_servers=0
-    
+
     docker exec "$DB_CONTAINER" psql -U monitoring -d monitoring -t -c "
-    SELECT hostname, host(ip_address), node_exporter_port 
-    FROM servers 
-    WHERE status = 'active' 
+    SELECT hostname, host(ip_address), node_exporter_port
+    FROM servers
+    WHERE status = 'active'
     AND (hostname LIKE 'monitored-node-%' OR hostname = 'consul-monitoring-server');
     " 2>/dev/null | while read -r line; do
         if [ -n "$line" ] && [[ ! "$line" =~ ^[[:space:]]*$ ]]; then
             hostname=$(echo "$line" | awk '{print $1}')
             ip=$(echo "$line" | awk '{print $3}')
             port=$(echo "$line" | awk '{print $5}')
-            
+
             if [ -n "$ip" ] && [ -n "$port" ]; then
                 total_servers=$((total_servers + 1))
                 echo -n "   Testing $hostname ($ip:$port)... "
-                
+
                 if timeout 5 nc -z "$ip" "$port" 2>/dev/null; then
                     echo "✅ Reachable"
                     reachable_servers=$((reachable_servers + 1))
@@ -254,7 +254,7 @@ main() {
         echo ""
         show_target_infrastructure
         echo ""
-        
+
         if generate_production_configs; then
             echo ""
             validate_connectivity
