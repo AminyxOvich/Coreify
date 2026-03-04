@@ -1,0 +1,5 @@
+# Minimum severity: warning (skip info/style hints)
+severity=warning
+
+# SC1091: Can't follow non-constant source (.env loaded at runtime)
+exclude=SC1091

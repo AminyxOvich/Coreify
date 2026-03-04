@@ -27,7 +27,8 @@ scan_network_for_targets() {
     log "Scanning network $NETWORK_RANGE for target servers..."
 
     # Use nmap to discover hosts with node_exporter running
-    local discovered_hosts=()
+    local discovered_hosts
+    discovered_hosts=()
 
     # Scan for hosts with node_exporter port open - use -Pn to skip ping test (hosts may block ICMP)
     log "Scanning for hosts with node_exporter (port $NODE_EXPORTER_PORT) - using -Pn to skip ping test..."
@@ -133,7 +134,8 @@ register_discovered_servers() {
             local server_id="$hostname"
 
             # Generate metadata
-            local metadata=$(cat << EOF
+            local metadata
+            metadata=$(cat << EOF
 {
     "discovery_method": "network_scan",
     "discovered_at": "$(date -u +"%Y-%m-%d %H:%M:%S")",
@@ -231,7 +233,8 @@ run_network_discovery() {
 
 # Function to setup automated network discovery
 setup_automated_network_discovery() {
-    local script_path="$(realpath "$0")"
+    local script_path
+    script_path="$(realpath "$0")"
     local cron_job="0 */2 * * * $script_path --automated >> $LOG_FILE 2>&1"
 
     log "Setting up automated network discovery (every 2 hours)..."

@@ -226,7 +226,8 @@ show_discovery_summary() {
 
 # Function to create cron job for automated discovery
 setup_automated_discovery() {
-    local script_path="$(realpath "$0")"
+    local script_path
+    script_path="$(realpath "$0")"
     local cron_job="*/5 * * * * $script_path --automated >> $LOG_FILE 2>&1"
 
     log "Setting up automated discovery (every 5 minutes)..."
@@ -252,7 +253,8 @@ main() {
 
     # Check if we got valid JSON
     if [ $discovery_result -eq 0 ] && [ -n "$servers_json" ] && echo "$servers_json" | jq . >/dev/null 2>&1; then
-        local count=$(echo "$servers_json" | jq '. | length' 2>/dev/null || echo "unknown")
+        local count
+        count=$(echo "$servers_json" | jq '. | length' 2>/dev/null || echo "unknown")
         log "✅ Found $count target servers - proceeding with validation"
 
         # Validate connectivity

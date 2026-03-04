@@ -227,7 +227,8 @@ validate_discovered_servers() {
 
 # Function to setup complete automation
 setup_complete_automation() {
-    local script_path="$(realpath "$0")"
+    local script_path
+    script_path="$(realpath "$0")"
 
     log "Setting up complete discovery automation..."
 
