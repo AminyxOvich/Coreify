@@ -62,43 +62,52 @@ A production-ready, fully automated monitoring and **self-healing** system for L
 ## 🗂️ Repository Structure
 
 ```
-Monitoring_Stack/
+Coreify/
 ├── anomaly_workflow_with_fallback.json   # Main n8n workflow (import this)
-├── setup_enhanced_database.sql          # PostgreSQL schema for server registry
-├── docker-compoose-monitored-in-node-02.yml  # Alt compose for node-02
-├── prontail-config-monitored-in-node-02.yml  # Promtail config for node-02
 ├── LICENSE
 │
 ├── monitored-system/                    # Deploy on EACH monitored node
-│   ├── docker-compose.yml
+│   ├── docker-compose.yml               # Monitored stack compose (host networking)
 │   ├── Dockerfile                       # Custom Consul agent image
+│   ├── setup-os.sh                      # ⭐ OS configuration (run once with sudo)
 │   ├── .env.example                     # ← Copy to .env and fill in IPs
+│   ├── promtail_docker_socket.te        # SELinux policy for Promtail
 │   ├── consul/
-│   │   ├── consul.hcl.template          # Consul agent config (uses env vars)
+│   │   ├── consul.hcl.template          # Consul agent config (env var templating)
+│   │   └── entrypoint.sh
+│   ├── promtail/
+│   │   ├── config.yml                   # Promtail scrape config
 │   │   └── entrypoint.sh
 │   ├── node-exporter/
 │   │   └── entrypoint.sh
-│   ├── promtail/
-│   │   └── config.yml
 │   └── scripts/
-│       ├── deploy.sh
-│       └── teardown.sh
+│       ├── deploy.sh                    # Deploy monitored stack
+│       └── teardown.sh                  # Stop and remove
 │
 └── monitoring-host-system/              # Deploy on the MONITORING HOST
-    ├── docker-compose.monitoring.yml
+    ├── docker-compose.monitoring.yml    # Full monitoring stack
+    ├── setup-os.sh                      # ⭐ OS configuration (run once with sudo)
+    ├── deploy-monitoring.sh             # Deploy monitoring stack
     ├── .env.example                     # ← Copy to .env and fill in secrets
-    ├── deploy-monitoring.sh
-    ├── init-db.sql
+    ├── monitoring_policy.te             # SELinux policy for monitoring services
     ├── System Prompt.md                 # n8n AI Agent system prompt
     ├── DISCOVERY_SYSTEM_COMPLETE.md     # Discovery system documentation
+    ├── discovery-automation.sh          # Automated discovery pipeline
+    ├── infrastructure-discovery.sh      # Infrastructure scanner
+    ├── network-discovery.sh             # Network-based discovery
+    ├── test-*.sh                        # Discovery test scripts
     └── config/
         ├── consul-server.hcl            # Consul server config
         ├── prometheus.yml               # Prometheus scrape config
         ├── consul-rules.yml             # Prometheus alerting rules
-        ├── loki.yml                     # Loki storage config
+        ├── loki.yml                     # Loki storage config (TSDB)
         ├── promtail.yml                 # Promtail for monitoring host logs
-        ├── promtail-agent.yml           # Promtail agent config template
-        └── prometheus_file_sd.json      # Static file SD targets (edit IPs)
+        ├── prometheus_file_sd.json      # Static file SD targets (edit IPs)
+        ├── init-postgres.sql            # Main PostgreSQL schema
+        ├── setup_enhanced_database.sql  # n8n workflow alert enhancements
+        └── grafana/provisioning/        # Auto-configured datasources
+            └── datasources/
+                └── datasources.yml
 ```
 
 ---
@@ -110,6 +119,7 @@ Monitoring_Stack/
 | Tool | Version | Purpose |
 |------|---------|---------|
 | Docker + Docker Compose | v2+ | Run all services |
+| Fedora / RHEL / CentOS | 38+ / 9+ | OS (or compatible Linux) |
 | n8n | latest | Workflow orchestration |
 | SaltStack | 3006+ | Remote command execution |
 | Python 3 | 3.9+ | Anomaly detection API |
@@ -122,24 +132,20 @@ Monitoring_Stack/
 ```bash
 cd monitoring-host-system
 
-# Configure secrets
+# ⭐ STEP 1: Configure OS (firewall, SELinux, Docker, sysctl)
+sudo ./setup-os.sh
+
+# STEP 2: Configure secrets
 cp .env.example .env
 nano .env   # Set GF_ADMIN_PASSWORD, POSTGRES_PASSWORD
 
-# Edit consul-server.hcl — replace YOUR_MONITORING_HOST_IP with your LAN IP
-nano config/consul-server.hcl
+# STEP 3: Set your monitoring host IP
+nano config/consul-server.hcl   # Replace YOUR_MONITORING_HOST_IP
 
-# Edit prometheus_file_sd.json — replace placeholder IPs with real node IPs
+# STEP 4: Add monitored node IPs (optional — Consul SD will discover them)
 nano config/prometheus_file_sd.json
 
-# Launch all services (Consul, Prometheus, Grafana, Loki, Promtail, PostgreSQL)
-./deploy-monitoring.sh
-```
-
-Services will be available at:
-| Service | URL | Default Credentials |
-|---------|-----|---------------------|
-| Grafana | http://localhost:3000 | admin / (from .env) |
+# STEP 5: Deploy the stack
 | Prometheus | http://localhost:9090 | — |
 | Loki | http://localhost:3100 | — |
 | Consul UI | http://localhost:8500 | — |
@@ -152,25 +158,32 @@ Services will be available at:
 ```bash
 cd monitored-system
 
-# Configure environment
+# ⭐ STEP 1: Configure OS (firewall, SELinux, Docker, sysctl)
+sudo ./setup-os.sh
+
+# STEP 2: Configure environment
 cp .env.example .env
 nano .env   # Set MONITORING_HOST, CONSUL_NODE_NAME, CONSUL_ADVERTISE
 
-# Build and start (Consul Agent, Node Exporter, Promtail)
+# STEP 3: Build and start (Consul Agent, Node Exporter, Promtail)
 ./scripts/deploy.sh
 ```
 
 > **Naming convention:** Set `CONSUL_NODE_NAME` to `monitored-node-01`, `monitored-node-02`, etc. The self-healing workflow uses this pattern to target SaltStack minions.
+>
+> **OS setup details:** `setup-os.sh` configures firewall ports (8500, 8301, 9100, 9080), SELinux policies for container socket access, sysctl tuning for networking, and Docker daemon settings.
 
 ---
 
-### 3. Set Up the Database
+### 3. Set Up the Database (Optional — for n8n workflow enhancements)
 
 ```bash
-# On the monitoring host, load the enhanced schema
+# On the monitoring host, load the alert suppression & maintenance mode schema
 docker exec -i monitoring-postgres psql -U monitoring -d monitoring \
-  < setup_enhanced_database.sql
+  < monitoring-host-system/config/setup_enhanced_database.sql
 ```
+
+> **Note:** The base schema (`init-postgres.sql`) is automatically loaded on first start. This extra schema adds alert history tracking and maintenance mode for the n8n self-healing workflow.
 
 ---
 
